@@ -1,0 +1,185 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum BuybackStatus {
+  NEW
+  CONTACTED
+  OFFER_SENT
+  ACCEPTED
+  REFUSED
+  CLOSED
+}
+
+model User {
+  id            String     @id @default(uuid())
+  firstName     String
+  lastName      String
+  email         String     @unique
+  passwordHash  String
+  phone         String?
+  role          Role       @default(USER)
+  isActive      Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  sessions      Session[]
+  orders        Order[]
+  addresses     Address[]
+  auditLogs     AuditLog[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Product {
+  id               String    @id @default(uuid())
+  name             String
+  slug             String    @unique
+  description      String
+  shortDescription String?
+  price            Int
+  stock            Int
+  category         String
+  brand            String?
+  imageUrl         String
+  additionalImages String[]  @default([])
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  orderItems       OrderItem[]
+}
+
+model Order {
+  id                      String        @id @default(uuid())
+  orderNumber             String        @unique
+  user                    User?         @relation(fields: [userId], references: [id])
+  userId                  String?
+  email                   String
+  firstName               String
+  lastName                String
+  phone                   String
+  status                  OrderStatus   @default(PENDING)
+  paymentStatus           PaymentStatus @default(PENDING)
+  subtotalAmount          Int
+  shippingAmount          Int
+  totalAmount             Int
+  stripeCheckoutSessionId String?
+  stripePaymentIntentId   String?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  orderItems              OrderItem[]
+}
+
+model OrderItem {
+  id                 String @id @default(uuid())
+  order              Order  @relation(fields: [orderId], references: [id])
+  orderId            String
+  product            Product? @relation(fields: [productId], references: [id])
+  productId          String?
+  productNameSnapshot String
+  unitPriceSnapshot  Int
+  quantity           Int
+  totalPrice         Int
+}
+
+model Address {
+  id           String   @id @default(uuid())
+  orderId      String?
+  user         User?    @relation(fields: [userId], references: [id])
+  userId       String?
+  addressLine1 String
+  addressLine2 String?
+  postalCode   String
+  city         String
+  country      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model BuybackRequest {
+  id           String        @id @default(uuid())
+  firstName    String
+  lastName     String
+  email        String
+  phone        String
+  equipmentType String
+  brand        String
+  model        String
+  condition    String
+  description  String
+  expectedPrice Int?
+  status       BuybackStatus @default(NEW)
+  adminNotes   String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  user       User?    @relation(fields: [userId], references: [id])
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+}
+
+model BlogPost {
+  id          String   @id @default(uuid())
+  title       String
+  slug        String   @unique
+  excerpt     String
+  content     String
+  imageUrl    String
+  category    String
+  author      String
+  readTime    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ContactRequest {
+  id          String   @id @default(uuid())
+  firstName   String
+  lastName    String
+  email       String
+  phone       String
+  subject     String
+  message     String
+  status      String   @default("NEW")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
