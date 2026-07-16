@@ -79,10 +79,10 @@ const INITIAL_ORDERS: Order[] = [
 ];
 
 const PACKAGES = [
-  { id: "r1", name: "Révision Express", price: 49, duration: "24–48h", description: "L'essentiel pour repartir rapidement. Idéal pour un entretien de routine.", services: ["Diagnostic complet", "Nettoyage filtre à air", "Nettoyage carburateur", "Vérification et réglage lame", "Contrôle niveau huile", "Test fonctionnel final"], popular: false },
-  { id: "r2", name: "Révision Complète", price: 99, duration: "2–3 jours", description: "La révision recommandée chaque saison pour un matériel en parfait état.", services: ["Tout le forfait Express", "Vidange moteur", "Remplacement bougie", "Réglage carburateur", "Affûtage ou remplacement lame", "Contrôle transmission", "Rapport d'intervention détaillé"], popular: true },
-  { id: "r3", name: "Remise en État", price: 179, duration: "5–7 jours", description: "Pour redonner une seconde vie à un matériel négligé ou en panne.", services: ["Tout le forfait Complet", "Démontage complet", "Nettoyage ultrason carburateur", "Remplacement pièces d'usure", "Garantie 3 mois révision", "Rapport photos avant/après"], popular: false },
-  { id: "r4", name: "Forfait Tronçonneuse", price: 79, duration: "48h", description: "Révision spécialisée pour tronçonneuses thermiques toutes marques.", services: ["Diagnostic complet", "Nettoyage carburateur", "Réglage ralenti et plein gaz", "Vérification circuit huileur", "Affûtage chaîne", "Test de sécurité complet"], popular: false },
+  { id: "r1", name: "Forfait Tronçonneuse", price: 50, duration: "24–48h", description: "L'essentiel pour repartir rapidement. Idéal pour un entretien de routine.", services: ["Révision complète", "Changement joint carburateur", "Changement bougie", "Changement durite", "Affûtage lame", "Test fonctionnel final", "Garantie 3 mois"], popular: false },
+  { id: "r2", name: "Forfait Débroussailleuse / Souffleur", price: 65, duration: "2–3 jours", description: "La révision recommandée chaque saison pour un matériel en parfait état.", services: ["Révision complète", "Changement joint carburateur", "Remplacement bougie", "Changement durite", "Réglage carburateur", "Contrôle allumage", "Graissage", "Contrôle des pièces d'usure", "Terrière", "Garantie 3 mois"], popular: true },
+  { id: "r3", name: "Forfait Tondeuse / Motoculteur", price: 85, duration: "5–7 jours", description: "Le forfait qu'il faut pour votre tondeuse ou votre motoculteur.", services: ["Révision complète", "Vidange", "Changement joint carburateur", "Changement bougie", "Changement durite", "Changement filtre à essence","Réglages bobine d'allumage", "Graissage des chaines", "Contrôle boitier traction & renvoi d'angle", "Affûtage lame", "Test fonctionnel final", "Garantie 3 mois"], popular: false },
+  { id: "r4", name: "Forfait Tracteur-tondeuse", price: 145, duration: "5-7 jours", description: "Révision spécialisée pour tracteurs-tondeuses de toutes marques.", services: ["Révision complète", "Vidange", "Changement joint carburateur", "Changement bougie", "Changement durite", "Changement filtre à essence","Réglages bobine d'allumage", "Graissage des chaines", "Contrôle boitier traction & renvoi d'angle", "Affûtage lame", "Test fonctionnel final", "Contrôle des pneumatiques", "Garantie 3 mois"], popular: false },
 ];
 
 const CATEGORIES = ["Tous", "Moteur", "Coupe", "Filtration", "Allumage", "Transmission"];
@@ -418,7 +418,7 @@ export default function App() {
             <span className="text-xs text-[#4CAF50] font-semibold tracking-[0.2em] uppercase" style={{ fontFamily: "'Barlow', sans-serif" }}>Réparation & Pièces d'Occasion</span>
           </div>
           <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif" }} className="font-black text-6xl md:text-8xl text-white leading-none tracking-tight mb-6">
-            DO'<br /><span className="text-[#4CAF50]">MOTOCULTURE</span>
+            DO<br /><span className="text-[#4CAF50]">MOTOCULTURE</span>
           </h1>
           <p className="text-lg md:text-xl text-white/75 max-w-2xl mx-auto mb-10 leading-relaxed" style={{ fontFamily: "'Barlow', sans-serif" }}>
             Votre spécialiste en réparation de matériel de motoculture et revente de pièces d'occasion de qualité.
@@ -441,9 +441,9 @@ export default function App() {
       <section className="bg-[#1A5C1A] py-8">
         <div className="max-w-7xl mx-auto px-4 grid grid-cols-3 divide-x divide-white/20">
           {[
-            { n: "10+", label: "Ans d'expérience" },
-            { n: "2 000+", label: "Machines réparées" },
-            { n: "500+", label: "Pièces en stock" },
+            { n: "5+", label: "Ans d'expérience" },
+            { n: "1000+", label: "Machines réparées" },
+            { n: "300+", label: "Pièces en stock" },
           ].map(({ n, label }) => (
             <div key={label} className="text-center py-2">
               <div style={{ fontFamily: "'Barlow Condensed', sans-serif" }} className="font-black text-3xl md:text-5xl text-white">{n}</div>
@@ -466,10 +466,10 @@ export default function App() {
               VOTRE SPÉCIALISTE<br />MOTOCULTURE LOCAL
             </h2>
             <p className="text-gray-600 mb-4 leading-relaxed" style={{ fontFamily: "'Barlow', sans-serif" }}>
-              Depuis plus de 10 ans, Do' Motoculture est votre partenaire de confiance pour l'entretien et la réparation de tous vos équipements de jardin : tondeuses, tronçonneuses, débroussailleuses, souffleurs et bien plus encore.
+              Depuis plus de 5 ans, Do Motoculture est votre partenaire de confiance pour l'entretien et la réparation de tous vos équipements de jardin : tondeuses, tronçonneuses, débroussailleuses, souffleurs et bien plus encore.
             </p>
             <p className="text-gray-600 mb-8 leading-relaxed" style={{ fontFamily: "'Barlow', sans-serif" }}>
-              Notre atelier prend en charge toutes les grandes marques (Husqvarna, Stihl, Honda, Briggs & Stratton…). Nous proposons également une sélection de pièces d'occasion testées pour réduire le coût de vos réparations.
+              Notre atelier prend en charge toutes les marques (Husqvarna, Stihl, Honda, Briggs & Stratton…). Nous proposons également une sélection de pièces d'occasion testées pour réduire le coût de vos réparations.
             </p>
             <div className="grid grid-cols-2 gap-3">
               {[
@@ -526,9 +526,9 @@ export default function App() {
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {[
-              { name: "Jean-Pierre M.", date: "Juin 2024", text: "Excellent service ! Ma tondeuse Honda était hors service depuis des mois. En 48h, elle était comme neuve. Prix très raisonnable et équipe sympathique." },
-              { name: "Marie-Claire D.", date: "Mai 2024", text: "J'ai commandé plusieurs pièces d'occasion pour ma débroussailleuse. Toutes parfaitement décrites, emballage soigné, livraison rapide. Je recommande vivement !" },
-              { name: "Patrick L.", date: "Avril 2024", text: "Diagnostic précis, devis honnête, réparation de qualité. Ma tronçonneuse Husqvarna tourne mieux qu'à la sortie du magasin. Service au top !" },
+              { name: "Julien H", date: "Juin 2025", text: "Excellent service ! Ma tondeuse Honda était hors service depuis des mois. En 48h, elle était comme neuve. Prix très raisonnable et équipe sympathique." },
+              { name: "Céline T", date: "Mai 2026", text: "J'ai commandé plusieurs pièces d'occasion pour ma débroussailleuse. Toutes parfaitement décrites, emballage soigné, livraison rapide. Je recommande vivement !" },
+              { name: "Alain M", date: "Juillet 2026", text: "Diagnostic précis, devis honnête, réparation de qualité. Ma tronçonneuse tourne mieux qu'à la sortie du magasin. Service au top !" },
             ].map(({ name, date, text }) => (
               <div key={name} className="border border-white/10 p-6 bg-white/5">
                 <div className="flex mb-3">
@@ -555,10 +555,10 @@ export default function App() {
             </h2>
             <div className="space-y-4 mb-8">
               {[
-                { icon: Phone, label: "+33 (0)6 12 34 56 78" },
-                { icon: Mail, label: "contact@domotoculture.fr" },
-                { icon: MapPin, label: "12 rue des Artisans, 69000 Lyon" },
-                { icon: Clock, label: "Lun–Ven 8h–18h · Sam 9h–12h" },
+                { icon: Phone, label: "+33 (0)7 83 61 74 09" },
+                { icon: Mail, label: "do.motoculture@gmail.com" },
+                { icon: MapPin, label: "220 route de tirebouras 82100 Saint-Aignan" },
+                { icon: Clock, label: "Lun–Ven 8h–12h 13:30-18h · Sam 9h–12h" },
               ].map(({ icon: Icon, label }) => (
                 <div key={label} className="flex items-center gap-3">
                   <div className="w-9 h-9 bg-[#1A5C1A] flex items-center justify-center flex-shrink-0">
