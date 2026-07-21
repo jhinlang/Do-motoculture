@@ -19,7 +19,7 @@ services:
       - key: PUBLIC_REGISTRATION_ENABLED
         value: false
       - key: TRUST_PROXY
-        value: true
+        value: 1
       - key: APP_URL
         fromService:
           type: web
