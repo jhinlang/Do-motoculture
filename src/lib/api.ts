@@ -135,7 +135,7 @@ export function productToView(product: ApiProduct): PartView {
   return {
     id: product.id,
     name: product.name,
-    price: product.price / 100,
+    price: product.price,
     category: product.category,
     condition,
     image: product.imageUrl,
