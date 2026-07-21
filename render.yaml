@@ -6,7 +6,7 @@ services:
     region: frankfurt
     dockerfilePath: ./Dockerfile
     dockerCommand: npm run prisma:migrate:deploy
-    healthCheckPath: /api/ready
+    healthCheckPath: /api/readiness
     envVars:
       - key: NODE_ENV
         value: production
