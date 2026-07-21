@@ -1,11 +1,16 @@
 import { randomBytes } from 'node:crypto';
+import { Agent as HttpsAgent } from 'node:https';
 import express from 'express';
 import Stripe from 'stripe';
 import { z } from 'zod';
 import { prisma } from '../db.js';
 import { config } from '../config.js';
 
-const stripe = config.stripeSecretKey ? new Stripe(config.stripeSecretKey) : null;
+const stripe = config.stripeSecretKey ? new Stripe(config.stripeSecretKey, {
+  httpAgent: new HttpsAgent({ keepAlive: true, family: 4 }),
+  maxNetworkRetries: 2,
+  timeout: 20_000,
+}) : null;
 const router = express.Router();
 
 const sessionSchema = z.object({
@@ -90,7 +95,12 @@ router.post('/session', async (req, res, next) => {
         cancel_url: `${config.frontendUrl}/commande/annulee`,
         expires_at: Math.floor(Date.now() / 1000) + (60 * 60),
       });
-    } catch (stripeError) {      console.error('Stripe checkout creation failed', { type: stripeError?.type, code: stripeError?.code, message: stripeError?.message });
+    } catch (stripeError) {
+      console.error('Stripe checkout creation failed', {
+        type: stripeError?.type,
+        code: stripeError?.code,
+        message: stripeError?.message,
+      });
       await prisma.order.update({ where: { id: order.id }, data: { paymentStatus: 'FAILED' } });
       throw stripeError;
     }
