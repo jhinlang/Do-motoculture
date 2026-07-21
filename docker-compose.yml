@@ -1,23 +1,22 @@
-version: "3.9"
-
+# Développement local uniquement. Ne pas utiliser cette configuration en production.
+name: domotoculture-dev
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: domotoculture_postgres
+    container_name: domotoculture_postgres_dev
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: domotoculture
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data-dev:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d domotoculture"]
       interval: 10s
       timeout: 5s
       retries: 5
-
 volumes:
-  postgres-data:
+  postgres-data-dev:

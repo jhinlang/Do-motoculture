@@ -1,4 +1,6 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
+import { api } from "../lib/api";
+import type { ApiBuybackRequest, ApiBuybackStatus } from "../lib/api";
 import {
   ShoppingCart, Menu, X, Phone, Mail, MapPin,
   Package, Wrench, FileText, Settings,
@@ -9,12 +11,18 @@ import {
   CheckCircle, Leaf, AlertCircle, EyeOff
 } from "lucide-react";
 
-type Page = "home" | "shop" | "repairs" | "buyback" | "blog" | "post" | "admin" | "checkout";
-type AdminSection = "overview" | "products" | "blog-mgmt" | "orders" | "users";
+type Page = "home" | "shop" | "repairs" | "buyback" | "blog" | "post" | "admin" | "checkout" | "order-success" | "order-cancel";
+type AdminSection = "overview" | "products" | "blog-mgmt" | "orders" | "users" | "buybacks";
 type UserRole = "admin" | "user" | "invité";
 type PartCondition = "Neuf" | "Très bon état" | "Bon état" | "Reconditionné";
-type OrderStatus = "en_attente" | "en_cours" | "expédié" | "livré";
+type OrderStatus = "en_attente" | "en_cours" | "expédié" | "livré" | "annulée";
 type CheckoutStep = "cart" | "info" | "payment" | "success";
+type CheckoutResultState = {
+  phase: "idle" | "checking" | "pending" | "confirmed" | "failed" | "canceled";
+  orderNumber?: string;
+  totalAmount?: number;
+  message?: string;
+};
 
 interface Part {
   id: string; name: string; price: number; category: string;
@@ -31,52 +39,12 @@ interface Account {
   role: UserRole; createdAt: string;
 }
 interface Order {
-  id: string; customerName: string; customerEmail: string;
+  id: string; apiId?: string; customerName: string; customerEmail: string;
   items: CartItem[]; total: number; status: OrderStatus; date: string;
 }
 
 // Aucun identifiant ni mot de passe ne doit être stocké dans le frontend.
 
-const INITIAL_PARTS: Part[] = [
-  { id: "p1", name: "Carburateur Husqvarna 135 Mark II", price: 45, category: "Moteur", condition: "Bon état", image: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=400&h=280&fit=crop&auto=format", description: "Carburateur d'occasion testé et fonctionnel. Compatible Husqvarna 135 et 140.", stock: 2, createdAt: "2024-06-01" },
-  { id: "p2", name: "Lame de tondeuse universelle 46cm", price: 18, category: "Coupe", condition: "Très bon état", image: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=400&h=280&fit=crop&auto=format", description: "Lame peu usée. Épaisseur 3mm, longueur 46cm. Alésage 25,4mm.", stock: 5, createdAt: "2024-06-05" },
-  { id: "p3", name: "Filtre à air Honda GCV160", price: 8, category: "Filtration", condition: "Neuf", image: "https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=400&h=280&fit=crop&auto=format", description: "Filtre à air neuf déstocké. Compatible Honda GCV160 et GCV170.", stock: 10, createdAt: "2024-06-08" },
-  { id: "p4", name: "Bobine d'allumage Stihl MS250", price: 55, category: "Allumage", condition: "Reconditionné", image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=280&fit=crop&auto=format", description: "Bobine reconditionnée, garantie 3 mois. Compatible Stihl MS230 et MS250.", stock: 1, createdAt: "2024-06-10" },
-  { id: "p5", name: "Courroie de transmission tondeuse", price: 22, category: "Transmission", condition: "Neuf", image: "https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=400&h=280&fit=crop&auto=format", description: "Courroie neuve, longueur 95cm. Convient à de nombreux modèles autoportés.", stock: 8, createdAt: "2024-06-12" },
-  { id: "p6", name: "Plateau de coupe 46cm complet", price: 85, category: "Coupe", condition: "Bon état", image: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=400&h=280&fit=crop&auto=format", description: "Plateau complet avec lame, axe et palier. Légère usure esthétique, mécaniquement parfait.", stock: 1, createdAt: "2024-06-15" },
-  { id: "p7", name: "Câble de traction autoportée", price: 15, category: "Transmission", condition: "Bon état", image: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=400&h=280&fit=crop&auto=format", description: "Câble d'origine légèrement utilisé. Longueur 1,2m, compatible nombreuses marques.", stock: 4, createdAt: "2024-06-18" },
-  { id: "p8", name: "Carburateur Briggs & Stratton 450E", price: 38, category: "Moteur", condition: "Reconditionné", image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=280&fit=crop&auto=format", description: "Démonté, nettoyé et remonté. Gicleur neuf. Garantie 3 mois.", stock: 2, createdAt: "2024-06-20" },
-];
-
-const INITIAL_POSTS: BlogPost[] = [
-  {
-    id: "b1", title: "Entretien de printemps : préparez votre tondeuse pour la saison",
-    excerpt: "Avec l'arrivée des beaux jours, il est temps de sortir la tondeuse du garage. Voici les vérifications essentielles à effectuer avant la première tonte.",
-    content: "L'entretien de printemps est une étape cruciale pour garantir le bon fonctionnement de votre tondeuse toute la saison. Après plusieurs mois de stockage, certains éléments nécessitent une attention particulière.\n\nContrôle de l'huile moteur\nCommencez par vérifier le niveau d'huile et son aspect. Une huile sombre et visqueuse doit être remplacée. Utilisez une huile SAE 30 ou 10W-30 pour la plupart des moteurs 4 temps.\n\nNettoyage du filtre à air\nLe filtre à air est souvent négligé alors qu'il joue un rôle essentiel. Un filtre encrassé provoque une consommation excessive d'essence et réduit les performances. Remplacez-le si nécessaire.\n\nVérification de la bougie\nLa bougie d'allumage doit être inspectée visuellement. Une électrode érodée ou encrassée doit être remplacée. Le prix d'une bougie (3–8€) est dérisoire comparé aux problèmes qu'une mauvaise bougie peut causer.\n\nÉtat de la lame\nUne lame émoussée déchire l'herbe au lieu de la couper nettement, favorisant les maladies du gazon. Affûtez ou remplacez la lame chaque printemps. Respectez toujours les consignes de sécurité lors de cette opération.\n\nEn cas de doute, n'hésitez pas à confier votre matériel à notre atelier pour une révision complète.",
-    image: "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&h=450&fit=crop&auto=format",
-    date: "2024-03-15", category: "Entretien", author: "Équipe Do' Motoculture", readTime: 5,
-  },
-  {
-    id: "b2", title: "Comment choisir une pièce d'occasion de qualité ?",
-    excerpt: "Acheter une pièce d'occasion peut être une excellente option économique, à condition de savoir quels critères évaluer. Nos experts vous guident.",
-    content: "Le marché des pièces d'occasion pour motoculture offre de réelles opportunités d'économies, mais certaines précautions s'imposent pour éviter les mauvaises surprises.\n\nL'état visuel\nInspectez soigneusement la pièce à la recherche de fissures, corrosion excessive, ou déformations. Une légère usure ou quelques traces d'utilisation sont normales et ne compromettent pas le fonctionnement.\n\nLa traçabilité\nPrivilégiez les pièces dont vous connaissez la provenance. Chez Do' Motoculture, chaque pièce est issue de matériels connus, démontés dans notre atelier.\n\nLa compatibilité\nAvant d'acheter, assurez-vous que la référence correspond bien à votre modèle. Le numéro de série de votre matériel est votre meilleur allié.\n\nNotre engagement qualité\nChaque pièce vendue est testée et contrôlée avant mise en vente. Nous indiquons honnêtement l'état réel de chaque pièce. Économisez jusqu'à 70% par rapport au prix du neuf.",
-    image: "https://images.unsplash.com/photo-1504328345606-18bbc8c9d7d1?w=800&h=450&fit=crop&auto=format",
-    date: "2024-04-02", category: "Conseils", author: "Équipe Do' Motoculture", readTime: 4,
-  },
-  {
-    id: "b3", title: "Tronçonneuse : les signes qui indiquent une révision urgente",
-    excerpt: "Une tronçonneuse mal entretenue est dangereuse. Découvrez les symptômes qui doivent vous alerter et vous pousser à consulter un professionnel.",
-    content: "La tronçonneuse est l'un des outils les plus dangereux du jardin. Un entretien régulier n'est pas optionnel — c'est une question de sécurité.\n\nDémarrage difficile ou impossible\nSi votre tronçonneuse ne démarre plus facilement malgré un carburant frais, il peut s'agir d'un problème de carburateur, de bougie ou de compression. Ne forcez pas sur le lanceur au risque d'endommager la corde.\n\nMoteur qui cale au ralenti\nUn moteur qui cale dès qu'on relâche la gâchette indique souvent un carburateur encrassé ou mal réglé.\n\nChaîne qui saute ou ne coupe plus\nUne chaîne émoussée ou mal tendue est dangereuse. L'affûtage doit être effectué régulièrement (toutes les 2–3 heures d'utilisation).\n\nVibrations excessives\nDes vibrations anormales peuvent indiquer un problème d'anti-vibration usé. Cessez immédiatement l'utilisation et apportez votre machine à notre atelier pour un diagnostic gratuit.",
-    image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&h=450&fit=crop&auto=format",
-    date: "2024-05-20", category: "Sécurité", author: "Équipe Do' Motoculture", readTime: 6,
-  },
-];
-
-const INITIAL_ORDERS: Order[] = [
-  { id: "CMD-001", customerName: "Jean-Pierre Martin", customerEmail: "jp.martin@email.fr", items: [{ part: INITIAL_PARTS[0], qty: 1 }], total: 45, status: "livré", date: "2024-06-10" },
-  { id: "CMD-002", customerName: "Sophie Dubois", customerEmail: "s.dubois@email.fr", items: [{ part: INITIAL_PARTS[1], qty: 2 }, { part: INITIAL_PARTS[2], qty: 1 }], total: 44, status: "expédié", date: "2024-06-18" },
-  { id: "CMD-003", customerName: "Michel Fontaine", customerEmail: "m.fontaine@email.fr", items: [{ part: INITIAL_PARTS[3], qty: 1 }], total: 55, status: "en_cours", date: "2024-06-22" },
-];
 
 const PACKAGES = [
   { id: "r1", name: "Forfait Tronçonneuse", price: 50, duration: "24–48h", description: "L'essentiel pour repartir rapidement. Idéal pour un entretien de routine.", services: ["Révision complète", "Changement joint carburateur", "Changement bougie", "Changement durite", "Affûtage lame", "Test fonctionnel final", "Garantie 3 mois"], popular: false },
@@ -100,7 +68,14 @@ const statusColor: Record<OrderStatus, string> = { en_attente: "bg-yellow-100 te
 export default function App() {
   const [page, setPage] = useState<Page>("home");
   const [postId, setPostId] = useState<string | null>(null);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const saved = window.localStorage.getItem("dm_cart");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [cartOpen, setCartOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState("Tous");
@@ -108,14 +83,21 @@ export default function App() {
   const [checkoutStep, setCheckoutStep] = useState<CheckoutStep>("cart");
   const [customerInfo, setCustomerInfo] = useState({ name: "", email: "", phone: "", address: "", city: "", zip: "" });
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [dataError, setDataError] = useState("");
+  const [checkoutResult, setCheckoutResult] = useState<CheckoutResultState>({ phase: "idle" });
   const [openFaq, setOpenFaq] = useState<string | null>(null);
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [currentUser, setCurrentUser] = useState<Account | null>(null);
   const [adminSection, setAdminSection] = useState<AdminSection>("overview");
-  const [parts, setParts] = useState<Part[]>(INITIAL_PARTS);
-  const [posts, setPosts] = useState<BlogPost[]>(INITIAL_POSTS);
-  const [orders, setOrders] = useState<Order[]>(INITIAL_ORDERS);
+  const [buybacks, setBuybacks] = useState<ApiBuybackRequest[]>([]);
+  const [buybackFilter, setBuybackFilter] = useState<ApiBuybackStatus | "">("");
+  const [adminPage, setAdminPage] = useState(1);
+  const [adminHasNext, setAdminHasNext] = useState(false);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [parts, setParts] = useState<Part[]>([]);
+  const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -125,7 +107,6 @@ export default function App() {
   const [showAddPart, setShowAddPart] = useState(false);
   const [newPart, setNewPart] = useState<Partial<Part>>({ name: "", price: 0, category: "Moteur", condition: "Bon état", description: "", stock: 1, image: "" });
   const [editingPartId, setEditingPartId] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showAddUser, setShowAddUser] = useState(false);
   const [newUser, setNewUser] = useState({ name: "", email: "", password: "", role: "user" as UserRole });
@@ -144,9 +125,17 @@ export default function App() {
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
   const addToCart = (part: Part) => {
+    if (part.stock <= 0) {
+      setDataError("Ce produit n’est plus disponible.");
+      return;
+    }
     setCart(prev => {
-      const ex = prev.find(i => i.part.id === part.id);
-      if (ex) return prev.map(i => i.part.id === part.id ? { ...i, qty: i.qty + 1 } : i);
+      const existing = prev.find(item => item.part.id === part.id);
+      if (existing) {
+        const quantity = Math.min(existing.qty + 1, part.stock, 20);
+        if (quantity === existing.qty) setDataError("La quantité maximale disponible est déjà dans le panier.");
+        return prev.map(item => item.part.id === part.id ? { ...item, part, qty: quantity } : item);
+      }
       return [...prev, { part, qty: 1 }];
     });
     setCartOpen(true);
@@ -155,99 +144,238 @@ export default function App() {
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.part.id !== id));
   const updateQty = (id: string, qty: number) => {
     if (qty < 1) return removeFromCart(id);
-    setCart(prev => prev.map(i => i.part.id === id ? { ...i, qty } : i));
+    setCart(prev => prev.map(item => {
+      if (item.part.id !== id) return item;
+      const safeQuantity = Math.min(qty, item.part.stock, 20);
+      if (safeQuantity < qty) setDataError("La quantité demandée dépasse le stock disponible.");
+      return { ...item, qty: safeQuantity };
+    }));
   };
 
   const navigate = (p: Page) => { setPage(p); setMenuOpen(false); window.scrollTo(0, 0); };
 
   useEffect(() => {
-    fetch("/api/products").then(r => r.ok ? r.json() : Promise.reject()).then(setParts).catch(() => {});
-    fetch("/api/auth/me", { credentials: "include" }).then(r => r.ok ? r.json() : null).then(user => user && setCurrentUser(user)).catch(() => {});
+    let active = true;
+    Promise.all([api.products(), api.session(), api.blogPosts()])
+      .then(([loadedParts, user, loadedPosts]) => {
+        if (!active) return;
+        setParts(loadedParts);
+        setCurrentUser(user);
+        setPosts(loadedPosts);
+        setCart(previous => previous
+          .map(item => {
+            const current = loadedParts.find(part => part.id === item.part.id);
+            return current ? { part: current, qty: Math.min(item.qty, current.stock, 20) } : null;
+          })
+          .filter((item): item is CartItem => Boolean(item) && item.qty > 0));
+      })
+      .catch((error) => {
+        if (active) setDataError(error instanceof Error ? error.message : "Chargement des données impossible.");
+      });
+    return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("dm_cart", JSON.stringify(cart));
+  }, [cart]);
+
+  useEffect(() => {
+    const pathname = window.location.pathname;
+    if (pathname === "/commande/annulee") {
+      setPage("order-cancel");
+      setCheckoutResult({ phase: "canceled" });
+      return;
+    }
+    if (pathname !== "/commande/succes") return;
+
+    setPage("order-success");
+    const sessionId = new URLSearchParams(window.location.search).get("session_id");
+    if (!sessionId) {
+      setCheckoutResult({ phase: "failed", message: "Identifiant de session Stripe manquant." });
+      return;
+    }
+
+    let stopped = false;
+    let timer: number | undefined;
+    let attempts = 0;
+    const check = async () => {
+      try {
+        const result = await api.checkoutStatus(sessionId);
+        if (stopped) return;
+        if (result.paymentStatus === "PAID") {
+          setCheckoutResult({ phase: "confirmed", orderNumber: result.orderNumber, totalAmount: result.totalAmount });
+          setCart([]);
+          return;
+        }
+        if (result.paymentStatus === "FAILED" || result.paymentStatus === "REFUNDED") {
+          setCheckoutResult({ phase: "failed", orderNumber: result.orderNumber, message: "Le paiement n’a pas été confirmé." });
+          return;
+        }
+        attempts += 1;
+        setCheckoutResult({ phase: "pending", orderNumber: result.orderNumber, totalAmount: result.totalAmount });
+        if (attempts < 15) timer = window.setTimeout(check, 2000);
+      } catch (error) {
+        if (!stopped) setCheckoutResult({ phase: "failed", message: error instanceof Error ? error.message : "Vérification impossible." });
+      }
+    };
+    setCheckoutResult({ phase: "checking" });
+    void check();
+    return () => {
+      stopped = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, []);
+
+
+  useEffect(() => {
+    if (currentUser?.role !== "admin") return;
+    let active = true;
+    setAdminLoading(true);
+    const load = async () => {
+      try {
+        if (adminSection === "overview") {
+          const [users, loadedOrders, requests] = await Promise.all([
+            api.adminUsers(1),
+            api.adminOrders(1),
+            api.adminBuybacks(1),
+          ]);
+          if (!active) return;
+          setAccounts(users);
+          setOrders(loadedOrders);
+          setBuybacks(requests);
+          setAdminHasNext(false);
+        } else if (adminSection === "products") {
+          const items = await api.adminProducts(adminPage);
+          if (active) { setParts(items); setAdminHasNext(items.length === 25); }
+        } else if (adminSection === "orders") {
+          const items = await api.adminOrders(adminPage);
+          if (active) { setOrders(items); setAdminHasNext(items.length === 25); }
+        } else if (adminSection === "users") {
+          const items = await api.adminUsers(adminPage);
+          if (active) { setAccounts(items); setAdminHasNext(items.length === 25); }
+        } else if (adminSection === "buybacks") {
+          const items = await api.adminBuybacks(adminPage, buybackFilter);
+          if (active) { setBuybacks(items); setAdminHasNext(items.length === 25); }
+        } else {
+          setAdminHasNext(false);
+        }
+        if (active) setDataError("");
+      } catch (error) {
+        if (active) setDataError(error instanceof Error ? error.message : "Chargement de l’administration impossible.");
+      } finally {
+        if (active) setAdminLoading(false);
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, [currentUser?.role, adminSection, adminPage, buybackFilter]);
 
   const handleLogin = async () => {
     setLoginError("");
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Connexion impossible.");
-      setCurrentUser(data);
+      const user = await api.login(loginEmail, loginPassword);
+      setCurrentUser(user);
       setAdminSection("overview");
-      const [usersResponse, ordersResponse] = await Promise.all([
-        fetch("/api/admin/users", { credentials: "include" }),
-        fetch("/api/admin/orders", { credentials: "include" }),
-      ]);
-      if (usersResponse.ok) setAccounts(await usersResponse.json());
-      if (ordersResponse.ok) setOrders(await ordersResponse.json());
-    } catch (error) { setLoginError(error instanceof Error ? error.message : "Connexion impossible."); }
-  };
-
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-    setCurrentUser(null); setAccounts([]); setLoginEmail(""); setLoginPassword("");
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setNewPart(p => ({ ...p, image: url }));
+      const [users, loadedOrders] = await Promise.all([api.adminUsers(), api.adminOrders()]);
+      setAccounts(users);
+      setOrders(loadedOrders);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Connexion impossible.");
     }
   };
 
+  const handleLogout = async () => {
+    try { await api.logout(); } catch { /* La session locale est tout de même effacée. */ }
+    setCurrentUser(null);
+    setAccounts([]);
+    setOrders([]);
+    setLoginEmail("");
+    setLoginPassword("");
+  };
+
+
   const savePart = async () => {
     if (!newPart.name || !newPart.price) return;
-    const method = editingPartId ? "PUT" : "POST";
-    const url = editingPartId ? `/api/admin/products/${editingPartId}` : "/api/admin/products";
-    const response = await fetch(url, { method, credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newPart) });
-    const data = await response.json();
-    if (!response.ok) { alert(data.error || "Enregistrement impossible."); return; }
-    setParts(prev => editingPartId ? prev.map(p => p.id === editingPartId ? data : p) : [data, ...prev]);
-    setEditingPartId(null); setNewPart({ name: "", price: 0, category: "Moteur", condition: "Bon état", description: "", stock: 1, image: "" }); setShowAddPart(false);
+    try {
+      const saved = await api.saveProduct(newPart, editingPartId || undefined);
+      setParts(prev => editingPartId ? prev.map(p => p.id === editingPartId ? saved : p) : [saved, ...prev]);
+      setEditingPartId(null);
+      setNewPart({ name: "", price: 0, category: "Moteur", condition: "Bon état", description: "", stock: 1, image: "" });
+      setShowAddPart(false);
+      setDataError("");
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Enregistrement impossible.");
+    }
   };
 
   const editPart = (p: Part) => { setNewPart({ ...p }); setEditingPartId(p.id); setShowAddPart(true); };
-  const deletePart = async (id: string) => { const response = await fetch(`/api/admin/products/${id}`, { method: "DELETE", credentials: "include" }); if (response.ok) setParts(prev => prev.filter(p => p.id !== id)); };
+  const deletePart = async (id: string) => {
+    if (!window.confirm("Désactiver ce produit ?")) return;
+    try {
+      await api.deactivateProduct(id);
+      setParts(prev => prev.filter(p => p.id !== id));
+      setDataError("");
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Désactivation impossible.");
+    }
+  };
 
   const saveUser = async () => {
     if (!newUser.name || !newUser.email || newUser.password.length < 12) return;
-    const response = await fetch("/api/admin/users", { method: "POST", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(newUser) });
-    const data = await response.json();
-    if (!response.ok) { alert(data.error || "Création impossible."); return; }
-    setAccounts(prev => [...prev, data]);
-    setNewUser({ name: "", email: "", password: "", role: "user" }); setShowAddUser(false);
+    try {
+      const created = await api.createUser(newUser);
+      setAccounts(prev => [...prev, created]);
+      setNewUser({ name: "", email: "", password: "", role: "user" });
+      setShowAddUser(false);
+      setDataError("");
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Création impossible.");
+    }
   };
 
-  const savePost = () => {
-    if (!newPost.title || !newPost.content) return;
-    const p: BlogPost = {
-      id: `b${Date.now()}`, title: newPost.title,
-      excerpt: newPost.excerpt || newPost.content.slice(0, 120) + "...",
-      content: newPost.content,
-      image: newPost.image || "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&h=450&fit=crop&auto=format",
-      date: new Date().toISOString().split("T")[0], category: newPost.category,
-      author: currentUser?.name || "Admin", readTime: Math.max(1, Math.ceil(newPost.content.length / 800)),
-    };
-    setPosts(prev => [p, ...prev]);
-    setNewPost({ title: "", excerpt: "", content: "", category: "Conseils", image: "" });
-    setShowAddPost(false);
+  const savePost = async () => {
+    if (!newPost.title || !newPost.excerpt || !newPost.content || !newPost.image) {
+      setDataError("Tous les champs de l’article, dont l’URL de l’image, sont requis.");
+      return;
+    }
+    try {
+      const post = await api.saveBlogPost(newPost);
+      setPosts(prev => [post, ...prev]);
+      setNewPost({ title: "", excerpt: "", content: "", category: "Conseils", image: "" });
+      setShowAddPost(false);
+      setDataError("");
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Publication impossible.");
+    }
   };
 
   const submitPayment = async () => {
+    if (paymentLoading) return;
+    if (cart.length === 0) {
+      setDataError("Votre panier est vide.");
+      return;
+    }
+    const invalidItem = cart.find(item => item.qty < 1 || item.qty > item.part.stock || item.qty > 20);
+    if (invalidItem) {
+      setDataError("Le panier contient une quantité indisponible. Vérifiez le stock.");
+      return;
+    }
     setPaymentLoading(true);
+    setDataError("");
     try {
-      const response = await fetch("/api/checkout/session", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customer: customerInfo, items: cart.map(item => ({ productId: item.part.id, quantity: item.qty })) }),
+      const data = await api.createCheckout({
+        customer: {
+          name: customerInfo.name.trim(),
+          email: customerInfo.email.trim(),
+          phone: customerInfo.phone.trim() || undefined,
+        },
+        items: cart.map(item => ({ productId: item.part.id, quantity: item.qty })),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Paiement indisponible.");
       window.location.assign(data.url);
-    } catch (error) { alert(error instanceof Error ? error.message : "Paiement indisponible."); }
-    finally { setPaymentLoading(false); }
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Paiement indisponible.");
+      setPaymentLoading(false);
+    }
   };
 
   const submitBuyback = async (e: React.FormEvent) => {
@@ -271,11 +399,17 @@ export default function App() {
     }
   };
 
-  const submitContact = (e: React.FormEvent) => {
+  const submitContact = async (e: React.FormEvent) => {
     e.preventDefault();
-    setContactSent(true);
-    setContactForm({ name: "", email: "", phone: "", subject: "", message: "" });
-    setTimeout(() => setContactSent(false), 5000);
+    try {
+      await api.contact(contactForm);
+      setContactSent(true);
+      setContactForm({ name: "", email: "", phone: "", subject: "", message: "" });
+      setDataError("");
+      setTimeout(() => setContactSent(false), 5000);
+    } catch (error) {
+      setDataError(error instanceof Error ? error.message : "Envoi impossible.");
+    }
   };
 
   const filteredParts = parts.filter(p => {
@@ -1148,6 +1282,19 @@ export default function App() {
       );
     }
 
+    if (currentUser.role !== "admin") {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-gray-950 px-4 pt-16">
+          <div className="max-w-md border border-red-500/20 bg-gray-900 p-8 text-center">
+            <AlertCircle className="mx-auto mb-4 h-10 w-10 text-red-400" />
+            <h1 className="mb-2 text-2xl font-bold text-white">Accès refusé</h1>
+            <p className="mb-6 text-gray-400">Ce compte ne possède pas les droits administrateur.</p>
+            <button type="button" onClick={handleLogout} className="bg-[#1A5C1A] px-5 py-3 font-semibold text-white">Se déconnecter</button>
+          </div>
+        </div>
+      );
+    }
+
     const revenue = orders.reduce((s, o) => s + o.total, 0);
 
     return (
@@ -1165,9 +1312,10 @@ export default function App() {
               { id: "products" as AdminSection, icon: Package, label: "Pièces" },
               { id: "blog-mgmt" as AdminSection, icon: FileText, label: "Blog" },
               { id: "orders" as AdminSection, icon: ShoppingCart, label: "Commandes" },
+              { id: "buybacks" as AdminSection, icon: Wrench, label: "Reprises" },
               ...(currentUser.role === "admin" ? [{ id: "users" as AdminSection, icon: Users, label: "Utilisateurs" }] : []),
             ] as { id: AdminSection; icon: React.ComponentType<{ className?: string }>; label: string }[]).map(({ id, icon: Icon, label }) => (
-              <button key={id} onClick={() => setAdminSection(id)} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${adminSection === id ? "bg-[#1A5C1A] text-white" : "text-gray-400 hover:text-white hover:bg-white/5"}`} style={{ fontFamily: "'Barlow', sans-serif" }}>
+              <button key={id} onClick={() => { setAdminSection(id); setAdminPage(1); }} className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm transition-colors ${adminSection === id ? "bg-[#1A5C1A] text-white" : "text-gray-400 hover:text-white hover:bg-white/5"}`} style={{ fontFamily: "'Barlow', sans-serif" }}>
                 <Icon className="w-4 h-4 flex-shrink-0" /> {label}
               </button>
             ))}
@@ -1190,7 +1338,7 @@ export default function App() {
               { id: "orders" as AdminSection, label: "Commandes" },
               ...(currentUser.role === "admin" ? [{ id: "users" as AdminSection, label: "Users" }] : []),
             ] as { id: AdminSection; label: string }[]).map(({ id, label }) => (
-              <button key={id} onClick={() => setAdminSection(id)} className={`px-3 py-1.5 text-xs font-medium transition-colors ${adminSection === id ? "bg-[#1A5C1A] text-white" : "border border-white/20 text-gray-400 hover:text-white"}`} style={{ fontFamily: "'Barlow', sans-serif" }}>
+              <button key={id} onClick={() => { setAdminSection(id); setAdminPage(1); }} className={`px-3 py-1.5 text-xs font-medium transition-colors ${adminSection === id ? "bg-[#1A5C1A] text-white" : "border border-white/20 text-gray-400 hover:text-white"}`} style={{ fontFamily: "'Barlow', sans-serif" }}>
                 {label}
               </button>
             ))}
@@ -1200,6 +1348,13 @@ export default function App() {
           </div>
 
           {/* Overview */}
+          {adminLoading && (
+            <div role="status" className="mb-5 flex items-center gap-3 border border-white/10 bg-gray-900 px-4 py-3 text-sm text-gray-300">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-t-[#4CAF50]" />
+              Chargement des données…
+            </div>
+          )}
+
           {adminSection === "overview" && (
             <div>
               <h1 style={{ fontFamily: "'Barlow Condensed', sans-serif" }} className="font-black text-3xl text-white mb-6">VUE D'ENSEMBLE</h1>
@@ -1277,15 +1432,11 @@ export default function App() {
                       <input type="number" value={newPart.stock ?? 1} onChange={e => setNewPart(p => ({ ...p, stock: parseInt(e.target.value) }))} min={0} className="w-full bg-gray-800 border border-white/10 text-white px-3 py-2 text-sm focus:outline-none focus:border-[#4CAF50] transition-colors" style={{ fontFamily: "'Barlow', sans-serif" }} />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-400 block mb-1" style={{ fontFamily: "'Barlow', sans-serif" }}>Photo (depuis votre PC)</label>
-                      <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
-                      <div className="flex gap-2 items-center">
-                        <button type="button" onClick={() => fileInputRef.current?.click()} className="flex-1 border border-dashed border-white/20 text-gray-400 px-3 py-2 text-xs hover:border-[#4CAF50] hover:text-white transition-colors flex items-center justify-center gap-2" style={{ fontFamily: "'Barlow', sans-serif" }}>
-                          <Upload className="w-3.5 h-3.5" />
-                          {newPart.image ? "Changer la photo" : "Choisir depuis mon PC"}
-                        </button>
-                        {newPart.image && <img src={newPart.image} alt="aperçu" className="w-12 h-10 object-cover border border-white/10 flex-shrink-0" />}
-                      </div>
+                      <label className="text-xs text-gray-400 block mb-1" style={{ fontFamily: "'Barlow', sans-serif" }}>URL de l’image persistante</label>
+                <div className="flex gap-2 items-center">
+                  <input type="url" required value={newPart.image ?? ""} onChange={e => setNewPart(p => ({ ...p, image: e.target.value }))} placeholder="https://..." className="flex-1 bg-gray-800 border border-white/10 text-white px-3 py-2 text-sm focus:outline-none focus:border-[#4CAF50] transition-colors" style={{ fontFamily: "'Barlow', sans-serif" }} />
+                  {newPart.image && <img src={newPart.image} alt="aperçu" className="w-12 h-10 object-cover border border-white/10 flex-shrink-0" />}
+                </div>
                     </div>
                     <div className="md:col-span-2">
                       <label className="text-xs text-gray-400 block mb-1" style={{ fontFamily: "'Barlow', sans-serif" }}>Description</label>
@@ -1394,7 +1545,7 @@ export default function App() {
                     </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => { setPostId(post.id); navigate("post"); }} className="p-1.5 text-gray-400 hover:text-white transition-colors"><Eye className="w-4 h-4" /></button>
-                      <button onClick={() => setPosts(p => p.filter(b => b.id !== post.id))} className="p-1.5 text-gray-400 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={async () => { if (!window.confirm("Supprimer cet article ?")) return; try { await api.deleteBlogPost(post.id); setPosts(p => p.filter(b => b.id !== post.id)); } catch (error) { setDataError(error instanceof Error ? error.message : "Suppression impossible."); } }} className="p-1.5 text-gray-400 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </div>
                 ))}
@@ -1427,7 +1578,7 @@ export default function App() {
                       <p className="text-xs text-gray-400 mb-2" style={{ fontFamily: "'Barlow', sans-serif" }}>Mettre à jour le statut :</p>
                       <div className="flex items-center gap-2 flex-wrap">
                         {(["en_attente", "en_cours", "expédié", "livré"] as OrderStatus[]).map(s => (
-                          <button key={s} onClick={async () => { const r = await fetch(`/api/admin/orders/${order.id}`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: s }) }); if (r.ok) setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: s } : o)); }}
+                          <button key={s} onClick={async () => { try { await api.updateOrderStatus(order.apiId || order.id, s); setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: s } : o)); setDataError(""); } catch (error) { setDataError(error instanceof Error ? error.message : "Modification impossible."); } }}
                             className={`text-xs px-3 py-1 font-medium transition-colors border ${order.status === s ? statusColor[s] + " border-transparent" : "border-white/10 text-gray-500 hover:text-white"}`}
                             style={{ fontFamily: "'Barlow', sans-serif" }}>
                             {statusLabel[s]}
@@ -1504,14 +1655,24 @@ export default function App() {
                         </td>
                         <td className="p-4"><span className="text-xs text-gray-400" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{acc.email}</span></td>
                         <td className="p-4">
-                          <span className={`text-xs px-2 py-0.5 font-medium ${acc.role === "admin" ? "bg-purple-100 text-purple-800" : acc.role === "user" ? "bg-blue-100 text-blue-800" : "bg-gray-700 text-gray-300"}`} style={{ fontFamily: "'Barlow', sans-serif" }}>
-                            {acc.role}
-                          </span>
+                          <select value={acc.role} onChange={async event => {
+                            const role = event.target.value as "admin" | "user";
+                            try {
+                              const updated = await api.updateUser(acc.id, { role });
+                              setAccounts(items => items.map(item => item.id === acc.id ? updated : item));
+                              setDataError("");
+                            } catch (error) {
+                              setDataError(error instanceof Error ? error.message : "Modification du rôle impossible.");
+                            }
+                          }} className="border border-white/10 bg-gray-800 px-2 py-1 text-xs text-white">
+                            <option value="user">user</option>
+                            <option value="admin">admin</option>
+                          </select>
                         </td>
                         <td className="p-4"><span className="text-xs text-gray-500" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{acc.createdAt}</span></td>
                         <td className="p-4 text-right">
                           {acc.role !== "admin" && (
-                            <button onClick={async () => { const r = await fetch(`/api/admin/users/${acc.id}`, { method: "DELETE", credentials: "include" }); if (r.ok) setAccounts(p => p.filter(a => a.id !== acc.id)); }} className="p-1.5 text-gray-500 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                            <button onClick={async () => { if (!window.confirm(acc.isActive ? "Désactiver cet utilisateur ?" : "Réactiver cet utilisateur ?")) return; try { const updated = await api.updateUser(acc.id, { isActive: !acc.isActive }); setAccounts(items => items.map(item => item.id === acc.id ? updated : item)); setDataError(""); } catch (error) { setDataError(error instanceof Error ? error.message : "Modification impossible."); } }} className={"p-1.5 transition-colors " + (acc.isActive ? "text-gray-500 hover:text-red-400" : "text-green-500 hover:text-green-300")} title={acc.isActive ? "Désactiver" : "Réactiver"}><Trash2 className="w-4 h-4" /></button>
                           )}
                         </td>
                       </tr>
@@ -1519,6 +1680,14 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {(["products", "orders", "users", "buybacks"] as AdminSection[]).includes(adminSection) && (
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <button type="button" disabled={adminPage === 1 || adminLoading} onClick={() => setAdminPage(page => Math.max(1, page - 1))} className="border border-white/10 px-4 py-2 text-sm text-gray-300 disabled:opacity-40">Précédent</button>
+              <span className="text-sm text-gray-400">Page {adminPage}</span>
+              <button type="button" disabled={!adminHasNext || adminLoading} onClick={() => setAdminPage(page => page + 1)} className="border border-white/10 px-4 py-2 text-sm text-gray-300 disabled:opacity-40">Suivant</button>
             </div>
           )}
         </div>
@@ -1583,11 +1752,55 @@ export default function App() {
     </footer>
   );
 
+
+  const OrderResultPage = ({ canceled = false }: { canceled?: boolean }) => {
+    const confirmed = checkoutResult.phase === "confirmed";
+    const pending = checkoutResult.phase === "checking" || checkoutResult.phase === "pending";
+    const failed = checkoutResult.phase === "failed";
+
+    return (
+      <section className="min-h-[70vh] bg-gray-50 px-4 py-20">
+        <div className="mx-auto max-w-xl rounded-xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+          <div className={"mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full " + (confirmed ? "bg-green-100 text-green-700" : canceled ? "bg-amber-100 text-amber-700" : failed ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700")}>
+            {confirmed ? <CheckCircle className="h-8 w-8" /> : failed ? <AlertCircle className="h-8 w-8" /> : <Clock className="h-8 w-8" />}
+          </div>
+          <h1 className="mb-3 text-3xl font-bold text-gray-900">
+            {confirmed ? "Commande confirmée" : canceled ? "Paiement annulé" : failed ? "Paiement non confirmé" : "Confirmation en cours"}
+          </h1>
+          <p className="mb-4 text-gray-600">
+            {confirmed
+              ? "Le paiement a été confirmé par Stripe et votre commande est enregistrée."
+              : canceled
+                ? "Aucun paiement n’a été confirmé. Votre panier a été conservé."
+                : failed
+                  ? checkoutResult.message || "Nous n’avons pas pu confirmer le paiement."
+                  : "Le webhook Stripe est encore en traitement. Cette page se met à jour automatiquement."}
+          </p>
+          {checkoutResult.orderNumber && <p className="mb-2 font-semibold text-gray-900">Commande {checkoutResult.orderNumber}</p>}
+          {checkoutResult.totalAmount !== undefined && <p className="mb-8 text-gray-600">Total : {(checkoutResult.totalAmount / 100).toFixed(2)} €</p>}
+          <div className="flex flex-col justify-center gap-3 sm:flex-row">
+            {canceled && <button type="button" onClick={() => { window.history.pushState({}, "", "/"); setPage("checkout"); }} className="bg-[#1A5C1A] px-5 py-3 font-semibold text-white">Revenir au panier</button>}
+            <button type="button" onClick={() => { window.history.pushState({}, "", "/"); setPage("home"); }} className="border border-gray-300 px-5 py-3 font-semibold text-gray-800">Retour à l’accueil</button>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
   // ─── RENDER ───────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: "'Barlow', sans-serif" }}>
       <Navbar />
       <CartSidebar />
+      {dataError && (
+        <div role="alert" className="fixed top-20 right-4 z-[70] max-w-md rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 shadow-lg">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{dataError}</span>
+            <button type="button" onClick={() => setDataError("")} className="ml-auto" aria-label="Fermer le message d’erreur"><X className="h-4 w-4" /></button>
+          </div>
+        </div>
+      )}
       <main>
         {page === "home" && <HomePage />}
         {page === "shop" && <ShopPage />}
@@ -1596,6 +1809,8 @@ export default function App() {
         {page === "blog" && <BlogPage />}
         {page === "post" && <BlogPostPage />}
         {page === "checkout" && <CheckoutPage />}
+        {page === "order-success" && <OrderResultPage />}
+        {page === "order-cancel" && <OrderResultPage canceled />}
         {page === "admin" && <AdminPage />}
       </main>
       {page !== "admin" && <Footer />}
