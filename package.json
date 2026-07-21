@@ -14,7 +14,7 @@
     "seed": "node server/seed.js",
     "postinstall": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:deploy": "prisma migrate deploy && npm run seed && npm start",
     "prisma:studio": "prisma studio",
     "test": "node --test --test-concurrency=1",
     "start:env": "node --env-file=.env server/index.js"
