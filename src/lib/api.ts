@@ -200,6 +200,7 @@ function splitName(name: string): { firstName: string; lastName: string } {
   return { firstName: words.shift() || "", lastName: words.join(" ") || "-" };
 }
 
+const blogToView = (post: any) => ({ id: post.id, title: post.title, excerpt: post.excerpt, content: post.content, image: post.imageUrl, date: new Date(post.createdAt).toLocaleDateString("fr-FR"), category: post.category, author: post.author, readTime: post.readTime });
 export const api = {
   async blogPosts(): Promise<BlogPostView[]> {
     const posts = await request<ApiBlogPost[]>("/api/blog");
