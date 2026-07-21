@@ -88,7 +88,7 @@ router.post('/session', async (req, res, next) => {
         metadata: { orderId: order.id },
         success_url: `${config.frontendUrl}/commande/succes?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${config.frontendUrl}/commande/annulee`,
-        expires_at: Math.floor(Date.now() / 1000) + (30 * 60),
+        expires_at: Math.floor(Date.now() / 1000) + (60 * 60),
       });
     } catch (stripeError) {
       await prisma.order.update({ where: { id: order.id }, data: { paymentStatus: 'FAILED' } });
