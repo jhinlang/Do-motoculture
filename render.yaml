@@ -5,7 +5,7 @@ services:
     plan: free
     region: frankfurt
     dockerfilePath: ./Dockerfile
-    dockerCommand: "npm run prisma:migrate:deploy && npm run seed && npm start"
+    dockerCommand: "npx prisma migrate deploy && npm run seed && npm start"
     healthCheckPath: /api/ready
     envVars:
       - key: NODE_ENV
