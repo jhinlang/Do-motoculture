@@ -33,6 +33,42 @@ const sessionSchema = z.object({
 
 const makeOrderNumber = () => `CMD-${randomBytes(8).toString('hex').toUpperCase()}`;
 
+async function createStripeCheckoutSession(params) {
+  const body = new URLSearchParams();
+  body.set('mode', params.mode);
+  body.set('customer_email', params.customer_email);
+  body.set('client_reference_id', params.client_reference_id);
+  body.set('metadata[orderId]', params.metadata.orderId);
+  body.set('success_url', params.success_url);
+  body.set('cancel_url', params.cancel_url);
+  body.set('expires_at', String(params.expires_at));
+  params.line_items.forEach((item, index) => {
+    const prefix = `line_items[${index}]`;
+    body.set(`${prefix}[price_data][currency]`, item.price_data.currency);
+    body.set(`${prefix}[price_data][product_data][name]`, item.price_data.product_data.name);
+    body.set(`${prefix}[price_data][unit_amount]`, String(item.price_data.unit_amount));
+    body.set(`${prefix}[quantity]`, String(item.quantity));
+  });
+
+  const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.stripeSecretKey}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body,
+    signal: AbortSignal.timeout(20_000),
+  });
+  const payload = await response.json();
+  if (!response.ok) {
+    throw Object.assign(new Error(payload?.error?.message || 'Stripe checkout creation failed.'), {
+      type: payload?.error?.type,
+      code: payload?.error?.code,
+    });
+  }
+  return payload;
+}
+
 router.post('/session', async (req, res, next) => {
   let order;
   try {
@@ -78,7 +114,7 @@ router.post('/session', async (req, res, next) => {
 
     let session;
     try {
-      session = await stripe.checkout.sessions.create({
+      session = await createStripeCheckoutSession({
         mode: 'payment',
         line_items: normalized.map((item) => ({
           price_data: {
