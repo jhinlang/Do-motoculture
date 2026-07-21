@@ -8,7 +8,7 @@ const parseTrustProxy = (value) => value == null ? false : (/^\d+$/.test(value) 
 const required = (key, fallback = undefined) => {
   const value = process.env[key] ?? fallback;
   if (!value) return undefined;
-  return value;
+  return typeof value === 'string' ? value.trim() : value;
 };
 
 export const config = {
