@@ -5,7 +5,7 @@ services:
     plan: free
     region: frankfurt
     dockerfilePath: ./Dockerfile
-    dockerCommand: npm run prisma:migrate:deploy && npm start
+    dockerCommand: npm run prisma:migrate:deploy dockerCommand: npm run prisma:migrate:deploy && npm startdockerCommand: npm run prisma:migrate:deploy && npm start npm run seed dockerCommand: npm run prisma:migrate:deploy && npm startdockerCommand: npm run prisma:migrate:deploy && npm start npm start
     healthCheckPath: /api/ready
     envVars:
       - key: NODE_ENV
