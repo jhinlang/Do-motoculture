@@ -5,9 +5,8 @@ services:
     plan: free
     region: frankfurt
     dockerfilePath: ./Dockerfile
-    preDeployCommand: npm run prisma:migrate:deploy
+    dockerCommand: sh -c "npm run prisma:migrate:deploy && npm start"
     healthCheckPath: /api/ready
-    maxShutdownDelaySeconds: 30
     envVars:
       - key: NODE_ENV
         value: production
