@@ -90,7 +90,7 @@ router.post('/session', async (req, res, next) => {
         cancel_url: `${config.frontendUrl}/commande/annulee`,
         expires_at: Math.floor(Date.now() / 1000) + (60 * 60),
       });
-    } catch (stripeError) {
+    } catch (stripeError) {      console.error('Stripe checkout creation failed', { type: stripeError?.type, code: stripeError?.code, message: stripeError?.message });
       await prisma.order.update({ where: { id: order.id }, data: { paymentStatus: 'FAILED' } });
       throw stripeError;
     }
