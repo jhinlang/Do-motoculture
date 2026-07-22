@@ -1,9 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { Agent as HttpsAgent } from 'node:https';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 import Stripe from 'stripe';
 import { z } from 'zod';
 import { prisma } from '../db.js';
+import { logger } from '../logger.js';
+import { CHECKOUT_RATE_LIMIT_MAX, CHECKOUT_RATE_LIMIT_WINDOW_MS } from '../payment-policy.js';
 import { config } from '../config.js';
 
 const stripe = config.stripeSecretKey ? new Stripe(config.stripeSecretKey, {
@@ -12,6 +15,14 @@ const stripe = config.stripeSecretKey ? new Stripe(config.stripeSecretKey, {
   timeout: 20_000,
 }) : null;
 const router = express.Router();
+
+const checkoutLimiter = rateLimit({
+  windowMs: CHECKOUT_RATE_LIMIT_WINDOW_MS,
+  limit: CHECKOUT_RATE_LIMIT_MAX,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Trop de tentatives de paiement. Réessayez dans quelques minutes.' },
+});
 
 const sessionSchema = z.object({
   customer: z.object({
@@ -69,7 +80,7 @@ async function createStripeCheckoutSession(params) {
   return payload;
 }
 
-router.post('/session', async (req, res, next) => {
+router.post('/session', checkoutLimiter, async (req, res, next) => {
   let order;
   try {
     const data = sessionSchema.parse(req.body);
@@ -144,11 +155,11 @@ router.post('/session', async (req, res, next) => {
         expires_at: Math.floor(Date.now() / 1000) + (60 * 60),
       });
     } catch (stripeError) {
-      console.error('Stripe checkout creation failed', {
-        type: stripeError?.type,
-        code: stripeError?.code,
-        message: stripeError?.message,
-      });
+    logger.warn('stripe_checkout_creation_failed', {
+      requestId: req.id,
+      errorType: stripeError?.type || 'Error',
+      errorCode: stripeError?.code || null,
+    });
       await prisma.$transaction((tx) => releaseReservation(tx, order.id, 'FAILED'));
       throw stripeError;
     }

@@ -1,0 +1,2 @@
+export const CHECKOUT_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+export const CHECKOUT_RATE_LIMIT_MAX = 10;
