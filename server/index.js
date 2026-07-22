@@ -18,7 +18,7 @@ import productRoutes from './src/routes/products.js';
 import blogRoutes from './src/routes/blog.js';
 import contactRoutes from './src/routes/contact.js';
 import buybackRoutes from './src/routes/buyback.js';
-import checkoutRoutes, { stripeWebhookHandler } from './src/routes/checkout.js';
+import checkoutRoutes, { stripeWebhookHandler, releaseExpiredReservations } from './src/routes/checkout.js';
 import adminRoutes from './src/routes/admin.js';
 
 const app = express();
@@ -132,6 +132,11 @@ const sessionCleanup = setInterval(() => cleanupExpiredSessions().catch(error =>
 }), 60 * 60 * 1000);
 sessionCleanup.unref();
 
+const reservationCleanup = setInterval(() => releaseExpiredReservations().catch(error => {
+  logger.warn('reservation_cleanup_failed', { errorName: error?.name || 'Error' });
+}), 5 * 60 * 1000);
+reservationCleanup.unref();
+
 const PORT = Number(process.env.PORT || config.port || 3001);
 const server = app.listen(PORT, '0.0.0.0', () => {
   logger.info('server_started', { port: PORT, environment: config.nodeEnv });
@@ -145,6 +150,7 @@ async function shutdown(signal) {
   if (shuttingDown) return;
   shuttingDown = true;
   clearInterval(sessionCleanup);
+  clearInterval(reservationCleanup);
   logger.info('server_stopping', { signal });
 
   const forceExit = setTimeout(() => {

@@ -95,22 +95,34 @@ router.post('/session', async (req, res, next) => {
     const total = subtotal + shipping;
     const [firstName, ...lastNameParts] = data.customer.name.split(/\s+/);
 
-    order = await prisma.$transaction((tx) => tx.order.create({
-      data: {
-        orderNumber: makeOrderNumber(),
-        email: data.customer.email,
-        firstName,
-        lastName: lastNameParts.join(' '),
-        phone: data.customer.phone || '',
-        status: 'PENDING',
-        paymentStatus: 'PENDING',
-        subtotalAmount: subtotal,
-        shippingAmount: shipping,
-        totalAmount: total,
-        orderItems: { create: normalized },
-      },
-      include: { orderItems: true },
-    }));
+    const reservationExpiresAt = new Date(Date.now() + (65 * 60 * 1000));
+    order = await prisma.$transaction(async (tx) => {
+      for (const item of normalized) {
+        const reserved = await tx.product.updateMany({
+          where: { id: item.productId, isActive: true, stock: { gte: item.quantity } },
+          data: { stock: { decrement: item.quantity } },
+        });
+        if (reserved.count !== 1) throw Object.assign(new Error('Stock insuffisant.'), { status: 409 });
+      }
+      return tx.order.create({
+        data: {
+          orderNumber: makeOrderNumber(),
+          email: data.customer.email,
+          firstName,
+          lastName: lastNameParts.join(' '),
+          phone: data.customer.phone || '',
+          status: 'PENDING',
+          paymentStatus: 'PENDING',
+          stockReservationStatus: 'RESERVED',
+          reservationExpiresAt,
+          subtotalAmount: subtotal,
+          shippingAmount: shipping,
+          totalAmount: total,
+          orderItems: { create: normalized },
+        },
+        include: { orderItems: true },
+      });
+    });
 
     let session;
     try {
@@ -137,7 +149,7 @@ router.post('/session', async (req, res, next) => {
         code: stripeError?.code,
         message: stripeError?.message,
       });
-      await prisma.order.update({ where: { id: order.id }, data: { paymentStatus: 'FAILED' } });
+      await prisma.$transaction((tx) => releaseReservation(tx, order.id, 'FAILED'));
       throw stripeError;
     }
 
@@ -161,6 +173,18 @@ router.get('/session/:sessionId', async (req, res, next) => {
   }
 });
 
+async function releaseReservation(tx, orderId, paymentStatus = 'FAILED') {
+  const order = await tx.order.findUnique({ where: { id: orderId }, include: { orderItems: true } });
+  if (!order || order.stockReservationStatus !== 'RESERVED') return order;
+  for (const item of order.orderItems) {
+    if (item.productId) await tx.product.update({ where: { id: item.productId }, data: { stock: { increment: item.quantity } } });
+  }
+  return tx.order.update({
+    where: { id: order.id },
+    data: { stockReservationStatus: 'RELEASED', paymentStatus },
+  });
+}
+
 async function markPaid(tx, session) {
   const orderId = session.metadata?.orderId || session.client_reference_id;
   if (!orderId) return;
@@ -169,20 +193,34 @@ async function markPaid(tx, session) {
   if (session.payment_status !== 'paid' || session.currency !== 'eur' || session.amount_total !== order.totalAmount) {
     throw new Error('Incohérence entre Stripe et la commande.');
   }
-  for (const item of order.orderItems) {
-    const result = await tx.product.updateMany({
-      where: { id: item.productId, isActive: true, stock: { gte: item.quantity } },
-      data: { stock: { decrement: item.quantity } },
-    });
-    if (result.count !== 1) throw new Error('Stock insuffisant lors du paiement.');
+  if (order.stockReservationStatus !== 'RESERVED') {
+    throw new Error('Réservation de stock indisponible lors du paiement.');
   }
   await tx.order.update({
     where: { id: order.id },
-    data: { paymentStatus: 'PAID', status: 'PROCESSING', stripePaymentIntentId: String(session.payment_intent || '') },
+    data: {
+      paymentStatus: 'PAID',
+      status: 'PROCESSING',
+      stockReservationStatus: 'CONSUMED',
+      stripePaymentIntentId: String(session.payment_intent || ''),
+    },
   });
   await tx.auditLog.create({
     data: { action: 'order_paid', entityType: 'Order', entityId: order.id, metadata: { sessionId: session.id } },
   });
+}
+
+export async function releaseExpiredReservations(limit = 100) {
+  const expired = await prisma.order.findMany({
+    where: { stockReservationStatus: 'RESERVED', reservationExpiresAt: { lte: new Date() } },
+    select: { id: true },
+    orderBy: { reservationExpiresAt: 'asc' },
+    take: limit,
+  });
+  for (const order of expired) {
+    await prisma.$transaction((tx) => releaseReservation(tx, order.id, 'FAILED'));
+  }
+  return expired.length;
 }
 
 export async function stripeWebhookHandler(req, res) {
@@ -204,7 +242,7 @@ export async function stripeWebhookHandler(req, res) {
         await markPaid(tx, session);
       } else if (event.type === 'checkout.session.async_payment_failed' || event.type === 'checkout.session.expired') {
         const orderId = session.metadata?.orderId || session.client_reference_id;
-        if (orderId) await tx.order.updateMany({ where: { id: orderId, paymentStatus: 'PENDING' }, data: { paymentStatus: 'FAILED' } });
+        if (orderId) await releaseReservation(tx, orderId, 'FAILED');
       }
     });
   } catch (error) {
