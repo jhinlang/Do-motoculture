@@ -17,20 +17,38 @@ const registerSchema = z.object({
   password: z.string().min(12).max(200).regex(/[a-z]/).regex(/[A-Z]/).regex(/[0-9]/),
 });
 const dummyPasswordHash = hashPassword('Invalid-password-constant-2026');
+const MAX_LOGIN_FAILURES = 5;
+const LOGIN_LOCK_MS = 15 * 60 * 1000;
+
+export async function clearExpiredLoginLock(user, client = prisma) {
+  if (!user?.lockedUntil || user.lockedUntil > new Date()) return user;
+  return client.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null } });
+}
+
+export async function recordLoginFailure(user, client = prisma) {
+  if (!user) return null;
+  const failed = await client.user.update({ where: { id: user.id }, data: { failedLoginAttempts: { increment: 1 } } });
+  if (failed.failedLoginAttempts < MAX_LOGIN_FAILURES) return failed;
+  return client.user.update({ where: { id: user.id }, data: { lockedUntil: new Date(Date.now() + LOGIN_LOCK_MS) } });
+}
 
 router.get('/me', authMiddleware, (req, res) => res.json(publicUser(req.user)));
 
 router.post('/login', loginLimiter, async (req, res, next) => {
   try {
     const data = loginSchema.parse(req.body);
-    const user = await prisma.user.findUnique({ where: { email: data.email } });
+    let user = await prisma.user.findUnique({ where: { email: data.email } });
+    user = await clearExpiredLoginLock(user);
     const validPassword = await verifyPassword(data.password, user?.passwordHash || await dummyPasswordHash);
-    if (!user || !validPassword || !user.isActive) {
+    const isLocked = Boolean(user?.lockedUntil && user.lockedUntil > new Date());
+    if (!user || !validPassword || !user.isActive || isLocked) {
+      if (user && !isLocked) await recordLoginFailure(user);
       await prisma.auditLog.create({ data: { userId: user?.id || null, action: 'login_failed', entityType: 'User', entityId: user?.id || null } }).catch(() => undefined);
       return res.status(401).json({ error: 'Email ou mot de passe incorrect.' });
     }
     await prisma.$transaction([
       prisma.session.deleteMany({ where: { userId: user.id } }),
+      prisma.user.update({ where: { id: user.id }, data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: new Date() } }),
       ...(user.role === 'ADMIN' ? [prisma.auditLog.create({ data: { userId: user.id, action: 'admin_login', entityType: 'User', entityId: user.id } })] : []),
     ]);
     await createSession(res, user.id);
