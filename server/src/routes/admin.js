@@ -16,6 +16,15 @@ const roleSchema = z.enum(['USER', 'ADMIN']);
 const buybackStatusSchema = z.enum(['NEW', 'CONTACTED', 'OFFER_SENT', 'ACCEPTED', 'REFUSED', 'CLOSED']);
 const orderStatusSchema = z.enum(['PENDING', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELED']);
 
+export const httpUrlSchema = z.string().trim().url().max(2048).refine((value) => {
+  try {
+    const parsed = new URL(value);
+    return ['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
+}, { message: 'URL HTTP(S) sans identifiants requise.' });
+
 const productCreateSchema = z.object({
   name: z.string().trim().min(2).max(160),
   slug: z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(180),
@@ -25,8 +34,8 @@ const productCreateSchema = z.object({
   stock: z.number().int().nonnegative(),
   category: z.string().trim().min(1).max(100),
   brand: z.string().trim().max(100).optional().nullable(),
-  imageUrl: z.string().trim().url().max(2048),
-  additionalImages: z.array(z.string().trim().url().max(2048)).max(12).default([]),
+  imageUrl: httpUrlSchema,
+  additionalImages: z.array(httpUrlSchema).max(12).default([]),
   isActive: z.boolean().default(true),
 });
 const productPatchSchema = productCreateSchema.partial().refine((value) => Object.keys(value).length > 0, { message: 'Au moins un champ doit être fourni' });
