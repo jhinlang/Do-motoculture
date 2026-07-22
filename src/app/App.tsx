@@ -1802,16 +1802,16 @@ export default function App() {
         </div>
       )}
       <main>
-        {page === "home" && <HomePage />}
-        {page === "shop" && <ShopPage />}
-        {page === "repairs" && <RepairsPage />}
-        {page === "buyback" && <BuybackPage />}
-        {page === "blog" && <BlogPage />}
-        {page === "post" && <BlogPostPage />}
-        {page === "checkout" && <CheckoutPage />}
-        {page === "order-success" && <OrderResultPage />}
-        {page === "order-cancel" && <OrderResultPage canceled />}
-        {page === "admin" && <AdminPage />}
+        {page === "home" && HomePage()}
+        {page === "shop" && ShopPage()}
+        {page === "repairs" && RepairsPage()}
+        {page === "buyback" && BuybackPage()}
+        {page === "blog" && BlogPage()}
+        {page === "post" && BlogPostPage()}
+        {page === "checkout" && CheckoutPage()}
+        {page === "order-success" && OrderResultPage({})}
+        {page === "order-cancel" && OrderResultPage({ canceled: true })}
+        {page === "admin" && AdminPage()}
       </main>
       {page !== "admin" && <Footer />}
     </div>
